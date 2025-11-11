@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Three.js Multi-Select → Group → Transform → Ungroup (Keep World)</title>
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
+    #ui { position: fixed; top: 10px; left: 10px; background: rgba(0,0,0,0.6); color: #fff; padding: 10px 12px; border-radius: 12px; line-height: 1.4; font-size: 14px; user-select: none; backdrop-filter: blur(6px); }
+    #ui kbd { background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.25); padding: 2px 6px; border-radius: 6px; font-size: 12px; }
+    #ui .row { margin: 4px 0; opacity: 0.95; }
+    #ui .mode span { display: inline-block; min-width: 70px; }
+    canvas { display:block; }
+  </style>
+</head>
+<body>
+  <div id="ui">
+    <div class="row"><strong>Multi-select & group demo</strong></div>
+    <div class="row">Click to select, <kbd>Shift</kbd>+Click to multi-select</div>
+    <div class="row">Group: <kbd>G</kbd> • Ungroup & keep world: <kbd>U</kbd></div>
+    <div class="row">Modes: <kbd>W</kbd> translate • <kbd>E</kbd> rotate • <kbd>R</kbd> scale</div>
+    <div class="row">Snap: hold <kbd>Ctrl</kbd> while dragging (TransformControls)</div>
+    <div class="row">Deselect: <kbd>Esc</kbd></div>
+    <div class="row mode">Current mode: <span id="mode">translate</span></div>
+    <div class="row">Selected: <span id="selCount">0</span></div>
+  </div>
+  <script type="module">
+    import * as THREE from 'https://unpkg.com/three@0.161.0/build/three.module.js';
+    import { OrbitControls } from 'https://unpkg.com/three@0.161.0/examples/jsm/controls/OrbitControls.js';
+    import { TransformControls } from 'https://unpkg.com/three@0.161.0/examples/jsm/controls/TransformControls.js';
+
+    // --- Scene / Renderer ---
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0f1116);
+
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 200);
+    camera.position.set(7, 6, 10);
+
+    const orbit = new OrbitControls(camera, renderer.domElement);
+    orbit.enableDamping = true;
+
+    // Lights
+    const hemi = new THREE.HemisphereLight(0xffffff, 0x404040, 1.0);
+    scene.add(hemi);
+    const dir = new THREE.DirectionalLight(0xffffff, 1.0);
+    dir.position.set(5, 10, 7);
+    scene.add(dir);
+
+    // Ground grid
+    const grid = new THREE.GridHelper(40, 40, 0x666666, 0x333333);
+    scene.add(grid);
+
+    // --- Demo Objects ---
+    const objects = [];
+    const matRed = new THREE.MeshStandardMaterial({ color: 0xe74c3c });
+    const matGreen = new THREE.MeshStandardMaterial({ color: 0x27ae60 });
+    const matBlue = new THREE.MeshStandardMaterial({ color: 0x2980b9 });
+
+    function createBox(x, z, mat) {
+      const geo = new THREE.BoxGeometry(1, 1, 1);
+      const mesh = new THREE.Mesh(geo, mat.clone());
+      mesh.position.set(x, 0.5, z);
+      mesh.castShadow = mesh.receiveShadow = false;
+      mesh.name = `Box_${THREE.MathUtils.generateUUID().slice(0, 8)}`;
+      scene.add(mesh);
+      objects.push(mesh);
+      return mesh;
+    }
+
+    function createSphere(x, z, mat) {
+      const geo = new THREE.SphereGeometry(0.6, 32, 16);
+      const mesh = new THREE.Mesh(geo, mat.clone());
+      mesh.position.set(x, 0.6, z);
+      mesh.name = `Sphere_${THREE.MathUtils.generateUUID().slice(0, 8)}`;
+      scene.add(mesh);
+      objects.push(mesh);
+      return mesh;
+    }
+
+    createBox(-3, -2, matRed);
+    createBox(0, -3, matGreen);
+    createBox(3, -2, matBlue);
+    createSphere(-2, 2, matBlue);
+    createSphere(2, 2, matRed);
+
+    // --- Selection State ---
+    const selected = new Set();
+    const highlight = new Map(); // object -> original emissive/color
+
+    const raycaster = new THREE.Raycaster();
+    const ndc = new THREE.Vector2();
+
+    function setSelected(obj, isSelected) {
+      if (!obj || !obj.isMesh) return;
+      if (isSelected) {
+        if (!selected.has(obj)) {
+          selected.add(obj);
+          // store original material state for highlight
+          if (!highlight.has(obj)) {
+            const clone = obj.material.clone();
+            highlight.set(obj, clone);
+          }
+          // simple highlight: add emissive or brighten color
+          if ('emissive' in obj.material) obj.material.emissive = new THREE.Color(0x333333);
+          obj.material.color = obj.material.color.clone().offsetHSL(0, 0, 0.15);
+        }
+      } else {
+        if (selected.has(obj)) {
+          selected.delete(obj);
+          // restore original material
+          const orig = highlight.get(obj);
+          if (orig) {
+            obj.material.copy(orig);
+            highlight.delete(obj);
+          }
+        }
+      }
+      updateSelectionInfo();
+    }
+
+    function clearSelection() {
+      Array.from(selected).forEach(o => setSelected(o, false));
+    }
+
+    // --- Scratch Vectors ---
+    const tmpV3 = new THREE.Vector3();
+
+    // --- Temporary Group and TransformControls ---
+    let tempGroup = null; // created lazily
+
+    const tControls = new TransformControls(camera, renderer.domElement);
+    tControls.setMode('translate');
+    tControls.setSize(1.0);
+    tControls.setTranslationSnap(0); // Ctrl key will toggle snapping
+    tControls.setRotationSnap(THREE.MathUtils.degToRad(15));
+    tControls.setScaleSnap(0.25);
+    scene.add(tControls);
+
+    // disable orbit while transforming
+    tControls.addEventListener('dragging-changed', e => {
+      orbit.enabled = !e.value;
+    });
+
+    // snapping with Ctrl/Cmd
+    window.addEventListener('keydown', e => {
+      if (e.key === 'Control' || e.metaKey) {
+        if (tControls.getMode() === 'translate') tControls.setTranslationSnap(0.5);
+        if (tControls.getMode() === 'scale') tControls.setScaleSnap(0.1);
+      }
+    });
+    window.addEventListener('keyup', e => {
+      if (e.key === 'Control') {
+        if (tControls.getMode() === 'translate') tControls.setTranslationSnap(0);
+        if (tControls.getMode() === 'scale') tControls.setScaleSnap(0);
+      }
+    });
+
+    function ensureTempGroup() {
+      if (!tempGroup) {
+        tempGroup = new THREE.Group();
+        tempGroup.name = 'TempGroup';
+        scene.add(tempGroup);
+      } else if (!tempGroup.parent) {
+        scene.add(tempGroup);
+      }
+      tempGroup.position.set(0,0,0);
+      tempGroup.rotation.set(0,0,0);
+      tempGroup.scale.set(1,1,1);
+      tempGroup.updateMatrixWorld(true);
+      return tempGroup;
+    }
+
+    function groupSelectionAttach() {
+      if (selected.size === 0) return;
+      const g = ensureTempGroup();
+      // Attach each selected object into the group while preserving world xform
+      selected.forEach(obj => {
+        // Avoid re-attaching if already under the group
+        if (obj.parent !== g) g.attach(obj);
+      });
+      // Move the group pivot to the selection's average position for nicer transforms
+      const centroid = new THREE.Vector3();
+      let count = 0;
+      g.children.forEach(child => {
+        child.getWorldPosition(tmpV3);
+        centroid.add(tmpV3); count++;
+      });
+      if (count > 0) centroid.multiplyScalar(1 / count);
+      // Set group position to centroid while keeping children world poses
+      const children = g.children.slice();
+      // Temporarily move children to scene, reposition group, re-attach children
+      children.forEach(ch => scene.attach(ch));
+      g.position.copy(centroid);
+      g.updateMatrixWorld(true);
+      children.forEach(ch => g.attach(ch));
+
+      tControls.attach(g);
+    }
+
+    function ungroupBackToSceneKeepWorld() {
+      if (!tempGroup) return;
+      // Re-parent children back to scene keeping world transforms
+      const kids = tempGroup.children.slice();
+      kids.forEach(ch => scene.attach(ch));
+      // cleanup
+      tControls.detach();
+      scene.remove(tempGroup);
+      // keep instance for reuse but detach from scene
+      tempGroup = null;
+    }
+
+    // --- Pointer Picking ---
+    function pointerToNDC(event) {
+      const rect = renderer.domElement.getBoundingClientRect();
+      ndc.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      ndc.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    }
+
+    function pick(event) {
+      pointerToNDC(event);
+      raycaster.setFromCamera(ndc, camera);
+      const intersects = raycaster.intersectObjects(objects, true);
+      if (intersects.length === 0) return null;
+      // prefer topmost non-helper mesh
+      let obj = intersects[0].object;
+      while (obj && !obj.isMesh) obj = obj.parent;
+      return obj || null;
+    }
+
+    renderer.domElement.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return; // left only
+      const obj = pick(e);
+      const multi = e.shiftKey || e.metaKey || e.ctrlKey;
+
+      if (!obj) {
+        if (!multi) clearSelection();
+        return;
+      }
+
+      if (multi) {
+        // toggle selection
+        setSelected(obj, !selected.has(obj));
+      } else {
+        // single select
+        const wasOnlyThat = (selected.size === 1 && selected.has(obj));
+        clearSelection();
+        setSelected(obj, true);
+        // if it was already the only one, allow dragging via transform controls by grouping it
+        if (wasOnlyThat && tControls.object) {
+          // no-op
+        }
+      }
+    });
+
+    // --- Keyboard Shortcuts ---
+    const modeLabel = document.getElementById('mode');
+    const selCount = document.getElementById('selCount');
+    function updateSelectionInfo() {
+      selCount.textContent = String(selected.size);
+    }
+
+    window.addEventListener('keydown', (e) => {
+      if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable)) return;
+      switch (e.key.toLowerCase()) {
+        case 'w': tControls.setMode('translate'); modeLabel.textContent = 'translate'; break;
+        case 'e': tControls.setMode('rotate');    modeLabel.textContent = 'rotate'; break;
+        case 'r': tControls.setMode('scale');     modeLabel.textContent = 'scale'; break;
+        case 'g': groupSelectionAttach(); break; // group & attach transform controls
+        case 'u': ungroupBackToSceneKeepWorld(); break; // ungroup & keep world
+        case 'escape': clearSelection(); tControls.detach(); break;
+      }
+    });
+
+    // --- Resize ---
+    window.addEventListener('resize', onResize);
+    function onResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    // --- Animate ---
+    renderer.setAnimationLoop(() => {
+      orbit.update();
+      renderer.render(scene, camera);
+    });
+  </script>
+</body>
+</html>
