@@ -13,7 +13,7 @@ function App() {
         const env = new SceneInit('cube3D');
         env.initialize();
 
-        const cube = new Cube(4);
+        const cube = new Cube(3);
 
         // const cube2D = new CubeGui2D('cube2D', cube)
         const cube3D = new CubeGui3D(env.scene, cube, 40);
