@@ -1,73 +1,125 @@
-# React + TypeScript + Vite
+# 🎲 NxN Rubikova Kocka sa Three.js
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Interaktivni simulator Rubikove kocke sa 3D vizuelizacijom pomoću Three.js-a. Projekat kombinuje Python backend za logiku kockanja sa React + TypeScript frontend-om za modernu veb aplikaciju.
 
-Currently, two official plugins are available:
+## 🎯 Mogućnosti
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **3D Vizuelizacija** - Realistična 3D reprezentacija Rubikove kocke pomoću Three.js-a
+- **Podrška za NxN Kocke** - Simulator podržava bilo koju veličinu kocke (3x3, 4x4, itd.)
+- **Upravljanje Tastaturom** - Jednostavna kontrola potezima korišćenjem tastera
+- **Animirani Potezi** - Glatke animacije pri rotaciji strana kocke
+- **Python Backend** - Složena logika za manipulaciju stanjem kocke
+- **GUI Komponente** - Radix UI komponente sa Tailwind CSS stilom
 
-## React Compiler
+## 🛠 Tehnologije
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### Frontend
+- **React 19** - Moderan React sa hook-ovima
+- **TypeScript** - Bezbedna tipizacija u JavaScript-u
+- **Vite** - Brz build alat sa brzim osvežavanjem (HMR)
+- **Three.js** - 3D grafička biblioteka
+- **Tailwind CSS** - Utility-first CSS framework
+- **Radix UI** - Pristupačne UI komponente
+- **ESLint** - Alat za analizu koda i linting
 
-## Expanding the ESLint configuration
+### Backend
+- **Python** - Logika Rubikove kocke
+  - `cube.py` - Osnovna implementacija kocke
+  - `cube_gui.py` - GUI komponente za prikaz
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## 🚀 Instalacija i Pokretanje
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+### Preduslovi
+- Node.js (verzija 18+)
+- npm ili yarn
+- Python 3.x (za Python skripte)
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+### Setup
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+1. **Kloniranje repozitorijuma**
+```bash
+git clone https://github.com/username/nxn-rubics-cube-three-js.git
+cd nxn-rubics-cube-three-js
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+2. **Instalacija zavisnosti**
+```bash
+npm install
 ```
+
+3. **Pokretanje razvojnog servera**
+```bash
+npm run dev
+```
+Server će biti dostupan na `http://localhost:5173`
+
+### Pravljenje za produkciju
+```bash
+npm run build
+```
+
+Rezultat će biti u `dist/` direktorijumu.
+
+### Pregled produkcijskog builda
+```bash
+npm run preview
+```
+
+## 📁 Struktura Projekta
+
+```
+├── src/
+│   ├── App.tsx              # Glavna React komponenta
+│   ├── main.tsx             # Ulazna točka
+│   ├── index.css            # Globalni stilovi
+│   ├── lib/
+│   │   ├── Cube.ts          # Logika Rubikove kocke
+│   │   ├── CubeGui.ts       # 3D prikaz sa Three.js
+│   │   ├── SceneInit.ts     # Inicijalizacija Three.js scene
+│   │   └── utils.ts         # Pomoćne funkcije
+│   ├── components/
+│   │   └── ui/              # Radix UI komponente
+│   └── assets/              # Slike i teksture (cubemap, cm2)
+├── public/                   # Javni resursi
+├── cube.py                  # Python implementacija kocke
+├── cube_gui.py              # Python GUI komponente
+├── test_gui.py              # Testovi za GUI
+├── test_gui_4x4.py          # Testovi za 4x4 kocku
+├── package.json             # NPM zavisnosti
+├── tsconfig.json            # TypeScript konfiguracija
+├── vite.config.ts           # Vite konfiguracija
+└── eslint.config.js         # ESLint konfiguracija
+```
+
+## ⌨️ Kontrole
+
+Kocka se upravlja korišćenjem tastature:
+
+| Taster | Potez | Shift + Taster | Obrnuti potez |
+|--------|-------|----------------|---------------|
+| **F** | Front | Shift+F | Front' |
+| **R** | Right | Shift+R | Right' |
+| **U** | Up    | Shift+U | Up' |
+| **L** | Left  | Shift+L | Left' |
+| **D** | Down  | Shift+D | Down' |
+| **B** | Back  | Shift+B | Back' |
+
+## 🎓 Kako Radi
+
+### Cube klasa (cube.py & Cube.ts)
+- Upravlja stanjem Rubikove kocke
+- Podržava proizvoljan broj slojeva (N x N)
+- Prati boje na svakom kvadratiću
+- Implementira sve standardne poteze (F, R, U, L, D, B)
+- Podrška za obrnute poteze sa prime notacijom (')
+
+### CubeGui3D (CubeGui.ts)
+- Kreira 3D reprezentaciju kocke u Three.js
+- Animira rotacije prilikom izvršavanja poteza
+- Mapira stanje kocke na Three.js geometriju
+- Ažurira boje nakon svakog poteza
+
+### SceneInit (SceneInit.ts)
+- Inicijalizuje Three.js scenu
+- Postavlja kameru, svetla i renderer
+- Omogućava 3D prikaz
